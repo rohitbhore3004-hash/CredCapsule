@@ -1,0 +1,219 @@
+Rebuild CredCapsule v4 from scratch. Everything needed is in this file.
+
+PROJECT: credcapsule_single.py — single-file Python credential vault.
+Only external dep: `cryptography` library. Works on Linux, macOS, Windows.
+No database, no SQLite. Custom binary .ccv file format.
+
+━━━ FILE STRUCTURE ━━━
+credcapsule_single.py   ← main implementation + CLI
+CredCapsule.psm1        ← PowerShell module
+pyproject.toml          ← pip-installable package config
+tests/test_vault.py     ← pytest suite
+
+━━━ CRYPTO STACK (implement everything, nothing omitted) ━━━
+- X25519 / Curve25519 key exchange
+- X3DH (Extended Triple Diffie-Hellman) — single-party session bootstrap
+  with 10 one-time prekeys; DH1=IK×SPK, DH2=EK×IK, DH3=EK×SPK, DH4=EK×OTK
+  HKDF("X3DHv4_Root", ikm=dh1‖dh2‖dh3‖dh4, salt=zero32) → root_secret
+- Double Ratchet — DH ratchet step on EVERY vault.unlock()
+  Self-ratchet: DH(dh_priv, prev_pub) → dh_out
+  new_rk  = HKDF(rk ‖ dh_out, "RKUpd_v4")
+  new_ck  = HKDF(rk ‖ dh_out, "CKUpd_v4")
+  msg_key = HMAC-SHA256(new_ck, b"\x01")
+  Then rotate: prev_pub = old_dh_pub, generate new dh keypair
+- AES-256-GCM — all data at rest; per-credential isolated keys
+- HMAC-SHA256 — symmetric ratchet chain + file integrity checksum
+- HKDF-SHA256 — all key derivation, domain-separated info strings
+- scrypt(N=131072, r=8, p=1) — password → 32-byte master key (~1s, ~128MB)
+- BLAKE2b keyed hash — label_hash = blake2b(label, key=salt[:32], digest_size=32)
+  Labels NEVER stored in plaintext. label_hash stored instead.
+
+━━━ BINARY FILE FORMAT (.ccv) ━━━
+Header (86 bytes, unencrypted):
+  [0:10]   Magic: b'CREDCAPS\x04\x00'
+  [10:42]  Salt: 32 random bytes (scrypt + BLAKE2b key)
+  [42:54]  KDF params: struct.pack(">III", 131072, 8, 1)
+  [54:86]  File HMAC: HMAC-SHA256(file_key, body)
+           file_key = HKDF(master_key, "FileIntegrity_v4", salt=vault_salt)
+
+Body (after header) — big-endian TLV sections:
+  Each section: [4-byte tag][4-byte length big-endian][data]
+  Order: VERI · RATC · X3DH · KDFP · ENTR · AUDT
+
+Section contents:
+  VERI: AES-GCM(VerifyKey_v4, random32, aad=b"VERI")     ← password check
+  RATC: AES-GCM(RatchetKey_v4, ratchet_state, aad=b"RATC")
+  X3DH: AES-GCM(X3DHKey_v4, x3dh_bundle, aad=b"X3DH")
+  KDFP: struct.pack(">III", N, r, p)                      ← plaintext params
+  ENTR: concatenated individual credential blobs (NOT one big encrypted blob)
+        each entry = [32B label_hash][4B length big-endian][AES-GCM blob]
+        AES-GCM blob = nonce(12) + ciphertext + tag(16)
+        entry key = HKDF(master_key, b"EntryKey_v4" + label_hash, salt=vault_salt)
+        AES-GCM AAD = label_hash (prevents swap attacks)
+  AUDT: AES-GCM(AuditKey_v4, json_bytes, aad=b"AUDT")
+
+Key derivation info strings (HKDF info param, all UTF-8 bytes):
+  "VerifyKey_v4", "RatchetKey_v4", "X3DHKey_v4", "AuditKey_v4"
+  "FileIntegrity_v4", "EntryKey_v4" (prepend label_hash as suffix)
+  Ratchet init: "RatchetRoot_v4", "RatchetChain_v4"
+  Ratchet step: "RKUpd_v4", "CKUpd_v4"
+  X3DH: "X3DHv4_Root"
+
+Ratchet state binary (160 bytes + 4):
+  rk(32) + ck(32) + dh_prv(32) + dh_pub(32) + prev_pub(32) + n(4 big-endian)
+
+X3DH bundle binary:
+  ik_priv(32) + ik_pub(32) + spk_priv(32) + spk_pub(32)
+  + num_otk(2 big-endian) + [priv(32)+pub(32)] * num_otk
+
+Atomic writes: write to .ccv.tmp then os.replace() → safe on POSIX + NTFS
+File chmod 440 (POSIX) / S_IREAD (Windows) after every write
+File HMAC verified BEFORE any decryption attempt
+Empty vault ~1.8KB; each credential ~310 bytes
+
+━━━ CREDENTIAL TYPES & JSON WIRE FORMAT ━━━
+LoginCredential:   {"t":1,"l":label,"u":username,"p":password,"url":url,"tg":[tags]}
+ApiKeyCredential:  {"t":2,"l":label,"ki":key_id,"s":secret,"sv":service}
+SecureNote:        {"t":3,"l":label,"c":content}
+TokenCredential:   {"t":4,"l":label,"tk":token,"ex":expires}
+
+Credential size: ~310 bytes total (32 label_hash + 4 len + 12 nonce + ~246 json + 16 tag)
+
+━━━ VAULT CLASS PUBLIC API ━━━
+Vault.create(path, password, timeout=300)  → Vault (already unlocked)
+Vault.open(path, timeout=300)              → Vault (locked, call .unlock() next)
+vault.unlock(password)         advances Double Ratchet DH step, saves new state
+vault.lock()                   saves state then zeros all key material via ctypes.memset
+vault.set_credential(cred)     stores any Credential type
+vault.get_credential(label)    → typed Credential object
+vault.get(label)               → primary secret string
+vault.get_username(label)      → str (LoginCredential only)
+vault.get_password(label)      → str (LoginCredential only)
+vault.get_credential_secure(label) → context manager, zeros string fields on exit
+vault.has(label)               → bool
+vault.delete(label)
+vault.list()                   → sorted list of label strings
+vault.count()                  → int
+vault.info()                   → dict (no unlock needed)
+vault.audit_log()              → list of {"ts": float, "ev": str}
+vault.rotate_password(old, new) re-derives salt, re-encrypts all entries
+vault.destroy(password)        verifies password, wipes keys, unlinks file
+vault.backup()                 → raw bytes of vault file
+Context manager: auto-locks on __exit__
+
+━━━ RETRY LIMITING ━━━
+fail_count tracks consecutive wrong-password attempts on an instance
+Before each unlock attempt: check table, sleep if threshold crossed
+{3: 5s, 5: 30s, 7: 120s, 10: 600s, 15: 3600s}
+At 20 failures → raise RetryLimitError (no more attempts)
+Success resets fail_count to 0
+
+━━━ SECURE MEMORY ━━━
+All key material held in bytearray, NOT bytes (so ctypes.memset works)
+Zero pattern: ctypes.memset((ctypes.c_char * len(buf)).from_buffer(buf), 0, len(buf))
+Zeroed on lock(): mk, fk, rk, ck, dh_prv fields of ratchet state
+rotate_password: zero old mk and fk before replacing with new
+
+━━━ EXCEPTIONS (AV-clean names) ━━━
+CredCapsuleError → base
+AccessError(CredCapsuleError)        wrong password, file HMAC mismatch
+VaultLockedError(CredCapsuleError)   operation requires unlocked vault
+CredentialNotFound(CredCapsuleError) label not in vault
+VaultExistsError(CredCapsuleError)   create on existing path
+VaultNotFound(CredCapsuleError)      open on missing path
+IntegrityError(CredCapsuleError)     bad magic / truncated header
+RetryLimitError(AccessError)         20 failed attempts reached
+
+━━━ CONVENIENCE CONSTRUCTORS ━━━
+login(label, username, password, url="", tags=None) → LoginCredential
+api_key(label, key_id, secret, service="")          → ApiKeyCredential
+note(label, content)                                → SecureNote
+token(label, token_value, expires="")               → TokenCredential
+
+━━━ CLI — all commands output clean JSON ━━━
+Entry point: if __name__ == "__main__": _cli_main()
+Global args: --vault/-v (required), --password/-p, --no-prompt
+
+Commands:
+  create                              create new vault
+  set    --label --value --kind       kinds: login|api_key|note|token
+         --username --url --key-id --service
+  get    --label                      returns {"label":..., "secret":...}
+  get-login --label                   returns {label, username, password, url, tags}
+  delete --label
+  list                                returns {"labels":[...], "count":N}
+  info                                returns {path, version, locked, size, kdf}
+  destroy
+  rotate --new-password
+  protocol                            returns dict of protocol parameter names/values
+
+Error output (stderr, exit 1): {"error": "...", "type": "ExceptionClassName"}
+
+━━━ POWERSHELL MODULE (CredCapsule.psm1) ━━━
+Auto-detect python3/python/py on PATH; locate credcapsule_single.py next to .psm1
+Helper _Invoke([string[]]$Args) calls Python subprocess, parses JSON, throws on error
+Helper _DecryptSecure([SecureString]) → plain string via Marshal.SecureStringToBSTR
+Module-level $script:VaultPath and $script:VaultPass cache open vault state
+
+Cmdlets:
+  Open-CredVault        -Path -Password -SecurePassword [-Create]
+  Close-CredVault       clears cached path/password
+  Get-CredVaultInfo     -VaultPath
+  Set-CredVaultLogin    -Label -Username -Password [-Url] [-VaultPath] [-VaultPassword/-SecureVaultPassword]
+  Set-CredVaultApiKey   -Label -KeyId -Secret [-Service]
+  Set-CredVaultNote     -Label -Content
+  Get-CredVaultLogin    -Label [-AsSecureString]  → adds .securePassword if -AsSecureString
+  Get-CredVaultApiKey   -Label
+  Get-CredVaultSecret   -Label  → returns plain string
+  Test-CredVaultEntry   -Label  → $true/$false
+  Get-CredVaultEntries         → {Labels:[...], Count:N}
+  Remove-CredVaultEntry -Label [SupportsShouldProcess]
+  Set-CredVaultPassword -NewPassword  (also updates $script:VaultPass)
+  Remove-CredVault      [SupportsShouldProcess]
+
+━━━ PYPROJECT.TOML ━━━
+name="credcapsule" version="4.0.0"
+requires-python=">=3.9"
+dependencies=["cryptography>=42.0"]
+optional dev deps: pytest>=8.0, pytest-cov
+scripts: credcapsule = "credcapsule_single:_cli_main"
+py-modules = ["credcapsule_single"]
+pytest testpaths = ["tests"]
+
+━━━ TESTS (tests/test_vault.py) ━━━
+61 tests covering:
+  TestCreate: file created, magic header, size, duplicate raises, open nonexistent
+  TestUnlock: wrong/correct password, lock/unlock state, context manager, key zeroing, locked-ops raise
+  TestLoginCredential: roundtrip, get/get_username/get_password, overwrite, unicode
+  TestApiKeyCredential: roundtrip, get returns secret
+  TestSecureNote: roundtrip, large note (10KB)
+  TestTokenCredential: roundtrip, get returns token
+  TestVaultOps: has/delete/not_found/list/count/info/backup/get_credential_secure
+  TestPersistence: survives lock/unlock, multiple credentials, delete persists
+  TestRatchet: n advances each unlock, root key changes each unlock
+  TestIntegrity: tampered body/header/magic raises, truncated raises
+  TestRotate: new password works, old fails, wrong old raises, all entries survive
+  TestDestroy: file removed, wrong password keeps file, locked after destroy
+  TestAudit: contains created/set/unlocked events, timestamps monotonic
+  TestKeyIsolation: different labels → different keys
+  TestConstructors: all four convenience constructors
+
+━━━ SECURITY PROPERTIES ━━━
+- Label names never stored in plaintext (BLAKE2b keyed hash stored)
+- Per-credential key isolation: HKDF(mk, "EntryKey_v4" + label_hash, salt)
+- AES-GCM AAD = label_hash → ciphertext bound to entry identity
+- File HMAC covers entire body → tamper-evident before any decryption
+- Double Ratchet: compromise of current ratchet state reveals nothing about past sessions
+- X3DH bootstrap: forward secrecy from first unlock
+- scrypt N=2^17: ~1 second / ~128MB RAM per attempt on commodity hardware
+- ctypes.memset: key material zeroed in-process before GC
+- os.chmod only: no subprocess calls for permissions
+- Atomic writes: power-safe, no partial-write corruption
+- Retry backoff: exponential delays up to 1hr, hard cap at 20 attempts
+
+━━━ EXACT SIZES FOR VERIFICATION ━━━
+Header:    86 bytes (10 magic + 32 salt + 12 kdf_params + 32 HMAC)
+Empty vault: ~1800 bytes
+Per credential: ~310 bytes (32 lh + 4 len + 12 nonce + ~246 json + 16 tag)
+Ratchet state: 164 bytes raw (160 + 4-byte counter)
+X3DH bundle with 10 OTKs: 4×32 + 2 + 10×64 = 770 bytes raw
