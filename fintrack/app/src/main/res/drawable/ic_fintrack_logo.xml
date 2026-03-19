@@ -1,0 +1,86 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+  <!--
+    FinTrack in-app logo icon (used in header, about screen, splash).
+    Wallet shape with upward tracking line.
+    Teal brand color, suitable for both light and dark themes.
+  -->
+
+  <!-- Wallet body background fill (teal) -->
+  <path
+      android:fillColor="#00897B"
+      android:pathData="
+        M 20,60
+        C 20,46 31,35 45,35
+        L 155,35
+        C 169,35 180,46 180,60
+        L 180,140
+        C 180,154 169,165 155,165
+        L 45,165
+        C 31,165 20,154 20,140
+        Z"/>
+
+  <!-- Wallet flap (top lighter section) -->
+  <path
+      android:fillColor="#00695C"
+      android:pathData="
+        M 20,60
+        C 20,46 31,35 45,35
+        L 155,35
+        C 169,35 180,46 180,60
+        L 180,82
+        L 20,82
+        Z"/>
+
+  <!-- Card/pocket on right side -->
+  <path
+      android:fillColor="#00695C"
+      android:pathData="
+        M 126,88
+        L 180,88
+        L 180,124
+        L 142,124
+        C 133,124 126,117 126,108
+        Z"/>
+
+  <!-- Coin dot in pocket -->
+  <path
+      android:fillColor="#4DB6AC"
+      android:pathData="
+        M 162,106
+        C 162,102 159,99 155,99
+        C 151,99 148,102 148,106
+        C 148,110 151,113 155,113
+        C 159,113 162,110 162,106
+        Z"/>
+
+  <!-- Tracking line (white upward trend) -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="
+        M 35,148
+        C 42,136 50,128 60,118
+        C 72,106 86,100 98,93
+        C 108,87 116,81 123,73
+        L 119,70
+        L 131,67
+        L 130,79
+        L 126,76
+        C 119,84 110,91 99,97
+        C 87,104 73,111 60,124
+        C 50,134 42,143 35,156
+        Z"/>
+
+  <!-- Bar chart (white) -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="
+        M 36,158 L 36,143 L 46,143 L 46,158 Z
+        M 52,158 L 52,133 L 62,133 L 62,158 Z
+        M 68,158 L 68,118 L 78,118 L 78,158 Z"/>
+
+</vector>
