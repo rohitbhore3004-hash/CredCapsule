@@ -43,3 +43,4 @@ That's it — no monthly periods, no daily budget calculations, no complex setup
 ## License
 
 GNU GPL v3 — see [LICENSE](LICENSE)
+# fintrack
