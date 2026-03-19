@@ -1,0 +1,97 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="1024dp"
+    android:height="1024dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+  <!--
+    FinTrack monochrome adaptive icon — wallet + upward tracking graph.
+    Uses fillColor="#ffffff" to work with themed icon coloring on Android 13+.
+  -->
+
+  <!-- Wallet outer shell (filled white, landscape rounded rect) -->
+  <path
+      android:fillColor="#ffffff"
+      android:pathData="
+        M 192,340
+        C 192,288 234,246 286,246
+        L 738,246
+        C 790,246 832,288 832,340
+        L 832,684
+        C 832,736 790,778 738,778
+        L 286,778
+        C 234,778 192,736 192,684
+        Z"/>
+
+  <!-- Dark cutout: wallet interior (to reveal the background) -->
+  <path
+      android:fillColor="#00695C"
+      android:pathData="
+        M 228,312
+        C 228,300 238,290 250,290
+        L 774,290
+        C 786,290 796,300 796,312
+        L 796,430
+        L 228,430
+        Z"/>
+
+  <!-- Lower interior cutout -->
+  <path
+      android:fillColor="#00695C"
+      android:pathData="
+        M 228,454
+        L 796,454
+        L 796,742
+        C 796,754 786,764 774,764
+        L 250,764
+        C 238,764 228,754 228,742
+        Z"/>
+
+  <!-- Coin pocket (right side, white filled) -->
+  <path
+      android:fillColor="#ffffff"
+      android:pathData="
+        M 640,454
+        L 832,454
+        L 832,590
+        L 740,590
+        C 685,590 640,548 640,496
+        Z"/>
+
+  <!-- Coin circle (dark cutout inside pocket) -->
+  <path
+      android:fillColor="#00695C"
+      android:pathData="
+        M 798,522
+        C 798,507 786,495 771,495
+        C 756,495 744,507 744,522
+        C 744,537 756,549 771,549
+        C 786,549 798,537 798,522
+        Z"/>
+
+  <!-- Trending graph line (white, overlaid on lower interior) -->
+  <path
+      android:fillColor="#ffffff"
+      android:pathData="
+        M 258,718
+        C 276,686 294,664 318,640
+        C 352,604 388,588 422,570
+        C 452,555 476,538 496,514
+        L 486,503
+        L 516,494
+        L 511,526
+        L 500,514
+        C 479,540 454,558 422,574
+        C 387,592 350,609 314,647
+        C 290,671 272,696 254,730
+        Z"/>
+
+  <!-- Bar chart elements (white) -->
+  <path
+      android:fillColor="#ffffff"
+      android:pathData="
+        M 258,736 L 258,690 L 298,690 L 298,736 Z
+        M 320,736 L 320,658 L 360,658 L 360,736 Z
+        M 382,736 L 382,620 L 422,620 L 422,736 Z"/>
+
+</vector>

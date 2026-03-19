@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+  <item>
+    <shape>
+      <!-- FinTrack brand color: deep teal-blue for a finance/tracking app -->
+      <solid android:color="#00695C"/>
+    </shape>
+  </item>
+</selector>
