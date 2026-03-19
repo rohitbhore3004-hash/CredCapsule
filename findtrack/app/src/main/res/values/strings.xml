@@ -58,11 +58,10 @@
   <string name="locale_label">Language</string>
   <string name="locale_system">Systemic</string>
   <string name="version">Version: %1$s</string>
-  <string name="about">About app</string>
-  <string name="description">FindTrack is an app that helps you track your spending and manage your wallet balance. Writing down each expense keeps you aware of where your money goes.</string>
+  <string name="version_label_short">Wallet Balance Tracker</string>
+  <string name="about">About FindTrack</string>
+  <string name="description">FindTrack helps you track your spending and always know how much money you have left. Enter your wallet balance, record expenses, and see your remaining balance in real time.</string>
   <string name="report_bug">Report a bug</string>
-  <string name="contribute">Contribute</string>
-  <string name="developer">Development &amp; design:</string>
   <string name="report_bug_title">Report a bug</string>
   <string name="report_via_github">Via GitHub issue</string>
   <string name="report_via_email">Via email</string>

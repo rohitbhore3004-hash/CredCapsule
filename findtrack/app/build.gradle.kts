@@ -10,12 +10,12 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.danilkinkin.findtrack"
+        applicationId = "com.findtrack.app"
         minSdk = 29
         targetSdk = 36
-        versionCode = 29
-        versionName = "4.8.0"
-        testInstrumentationRunner = "com.danilkinkin.findtrack.CustomTestRunner"
+        versionCode = 1
+        versionName = "1.0.0"
+        testInstrumentationRunner = "com.findtrack.app.CustomTestRunner"
     }
 
     ksp {
@@ -63,7 +63,7 @@ android {
         resources.excludes += "/META-INF/AL2.0"
         resources.excludes += "/META-INF/LGPL2.1"
     }
-    namespace = "com.danilkinkin.findtrack"
+    namespace = "com.findtrack.app"
 }
 
 dependencies {
